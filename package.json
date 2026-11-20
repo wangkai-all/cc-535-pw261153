@@ -1,0 +1,14 @@
+{
+  "name": "ticket-roll-handoff",
+  "version": "1.0.0",
+  "private": true,
+  "description": "收票站票卷导入、缺页补交与清算交接的本地演示站（零依赖）",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

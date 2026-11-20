@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>票卷交接站</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">票</span>
+        <div>
+          <h1>票卷交接站</h1>
+          <p>扫票进程交付原页 · 拼卷进程确认完整范围 · 清算端按票页记账</p>
+        </div>
+      </div>
+      <span class="pill" id="server-state">本地样例 · 未连接</span>
+    </header>
+
+    <main class="layout">
+      <aside class="panel rolls">
+        <div class="panel-head">
+          <h2>票卷</h2>
+          <button class="ghost small" id="reload-rolls" type="button">刷新</button>
+        </div>
+        <ul class="roll-list" id="roll-list" aria-label="票卷列表"></ul>
+        <form class="create" id="create-roll-form">
+          <h3>新建票卷</h3>
+          <label>卷号
+            <input name="rollNo" id="new-roll-no" value="RM-DEMO-101" autocomplete="off" required />
+          </label>
+          <div class="row">
+            <label>登记页数
+              <input name="pageCount" id="new-page-count" value="4" inputmode="numeric" autocomplete="off" />
+            </label>
+            <label>每页行数
+              <input name="linesPerPage" id="new-lines-per-page" value="3" inputmode="numeric" autocomplete="off" />
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" name="lastPageLost" id="new-last-page-lost" />
+            卷尾页已丢失（无法登记总页数时勾选）
+          </label>
+          <button class="primary" type="submit">建立票卷</button>
+        </form>
+        <p class="hint">样例卷：RM-2024-001 缺页且尾页残缺；RM-2024-002 卷尾丢失；RM-2024-003 完整可整卷交付。</p>
+      </aside>
+
+      <section class="panel workspace">
+        <div class="panel-head">
+          <div>
+            <h2 id="current-roll-title">未选择票卷</h2>
+            <p class="sub" id="current-roll-sub">从左侧选择一卷，或在下方建立新卷。</p>
+          </div>
+          <span class="pill" id="tail-pill">—</span>
+        </div>
+
+        <div class="stat-grid" id="roll-stats" aria-label="票卷概览"></div>
+
+        <div class="actions">
+          <fieldset class="action">
+            <legend>扫票进程</legend>
+            <p class="action-desc">允许乱序交付：先拿到尾页、同一页复印两次都能导入，按票页去重。</p>
+            <label class="sr-only" for="import-text">待导入票页</label>
+            <textarea id="import-text" rows="4" spellcheck="false" placeholder="每行一页，例如&#10;1-1&#10;1-2&#10;4-1"></textarea>
+            <div class="row">
+              <button class="primary" id="btn-import" type="button">导入不完整票卷</button>
+              <button class="ghost" id="btn-fill-sample" type="button">填入样例</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="action">
+            <legend>补页</legend>
+            <p class="action-desc">缺页补上后自动重算完整范围；已清算票页不会重复送。</p>
+            <label class="sr-only" for="supplement-text">待补交票页</label>
+            <textarea id="supplement-text" rows="4" spellcheck="false" placeholder="例如&#10;3-1&#10;3-2&#10;3-3"></textarea>
+            <div class="row">
+              <button class="primary" id="btn-supplement" type="button">补交中间页</button>
+              <button class="ghost" id="btn-fill-gaps" type="button">填入缺失页</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="action">
+            <legend>拼卷交付</legend>
+            <p class="action-desc">只能交完整卷，或先交已确认段；两种口径都由清算端逐票核对。</p>
+            <div class="mode-choice" role="radiogroup" aria-label="交付口径">
+              <label class="check">
+                <input type="radio" name="delivery-mode" value="complete" checked />
+                只交完整卷（不完整则拒绝）
+              </label>
+              <label class="check">
+                <input type="radio" name="delivery-mode" value="confirmed" />
+                先交已确认段（可多次追加）
+              </label>
+            </div>
+            <div class="row">
+              <button class="primary" id="btn-deliver" type="button">生成清算交接</button>
+              <button class="ghost" id="btn-handoff" type="button">查看清算交接</button>
+            </div>
+          </fieldset>
+          <fieldset class="action">
+            <legend>卷级登记更正</legend>
+            <p class="action-desc">卷尾页找回后取消丢失标记并登记总页数，完整范围会立刻重算。</p>
+            <div class="row">
+              <label>登记页数
+                <input id="patch-page-count" inputmode="numeric" autocomplete="off" placeholder="留空表示不登记" />
+              </label>
+              <label>每页行数
+                <input id="patch-lines-per-page" inputmode="numeric" autocomplete="off" placeholder="留空表示按扫描推断" />
+              </label>
+            </div>
+            <label class="check">
+              <input type="checkbox" id="patch-last-page-lost" />
+              卷尾页仍丢失
+            </label>
+            <div class="row">
+              <button class="primary" id="btn-patch" type="button">保存登记更正</button>
+            </div>
+          </fieldset>
+        </div>
+
+        <section
+          class="evidence"
+          id="evidence"
+          data-evidence-result="idle"
+          aria-live="polite"
+          aria-label="业务结果核对区"
+        >
+          <div class="evidence-head">
+            <h2>业务结果</h2>
+            <span class="evidence-action" id="evidence-action">尚未操作</span>
+          </div>
+          <div class="evidence-columns">
+            <div class="evidence-col">
+              <h3>操作前</h3>
+              <pre id="evidence-before">—</pre>
+            </div>
+            <div class="evidence-col">
+              <h3>操作后</h3>
+              <pre id="evidence-after">—</pre>
+            </div>
+          </div>
+          <p class="evidence-note" id="evidence-note">选择票卷后执行操作，这里会列出前后状态与交付内容。</p>
+        </section>
+
+        <section class="detail">
+          <div class="detail-head">
+            <h2>卷内段落</h2>
+            <span class="sub" id="segment-note"></span>
+          </div>
+          <div class="segments" id="segments"></div>
+        </section>
+
+        <section class="detail">
+          <div class="detail-head">
+            <h2>清算交接记录</h2>
+            <span class="sub" id="handoff-note">尚未交付</span>
+          </div>
+          <ol class="handoffs" id="handoffs"></ol>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
